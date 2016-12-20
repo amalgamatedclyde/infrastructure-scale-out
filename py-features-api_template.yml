@@ -1,0 +1,126 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  Infrastructure scale-out stack.
+
+
+Parameters:
+  myInstanceType:
+    Type: String
+    Default: m4.xlarge
+    AllowedValues:
+      - m4.large
+      - t2.large
+      - m4.xlarge
+    Description: Enter instance type. Default is m4.xlarge.
+
+  myKeyPair:
+    Description: Amazon EC2 Key Pair
+    Type: "AWS::EC2::KeyPair::KeyName"
+
+Resources:
+  MyLaunchConfig:
+    Type: "AWS::AutoScaling::LaunchConfiguration"
+    Properties:
+      ImageId: "ami-a08f87b7"
+      IamInstanceProfile: "CodeDeploy-EC2-instance-profile"
+      InstanceType:
+        Ref: "myInstanceType"
+      KeyName:
+        Ref: "myKeyPair"
+      SecurityGroups:
+      - "sg-c5b595b8"
+
+  MyLoadBalancer:
+    Type: AWS::ElasticLoadBalancing::LoadBalancer
+    Properties:
+      Subnets:
+        - subnet-afd08787
+
+      SecurityGroups: ["sg-c5b595b8"]
+      ConnectionDrainingPolicy:
+        Enabled: true
+        Timeout: 60
+      Listeners:
+      - LoadBalancerPort: '80'
+        InstancePort: '80'
+        Protocol: HTTP
+      HealthCheck:
+        Target: HTTP:80/
+        HealthyThreshold: '3'
+        UnhealthyThreshold: '5'
+        Interval: '30'
+        Timeout: '5'
+
+
+  MyServerGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref MyLaunchConfig
+      VPCZoneIdentifier:
+        - subnet-afd08787
+
+      MinSize: '2'
+      MaxSize: '4'
+      LoadBalancerNames:
+      - Ref: MyLoadBalancer
+    UpdatePolicy:
+      AutoScalingRollingUpdate:
+        MinInstancesInService: '2'
+        MaxBatchSize: '1'
+        PauseTime: PT12M5S
+
+  ScaleUpPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: MyServerGroup
+      Cooldown: '1'
+      ScalingAdjustment: '1'
+
+  ScaleDownPolicy:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      AutoScalingGroupName:
+        Ref: MyServerGroup
+      Cooldown: '1'
+      ScalingAdjustment: '-1'
+
+  CPUAlarmHigh:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '80'
+      AlarmDescription: Alarm if CPU too high or metric disappears indicating instance is down
+      Period: '60'
+      AlarmActions:
+      - Ref: ScaleUpPolicy
+      Namespace: AWS/EC2
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: MyServerGroup
+      ComparisonOperator: GreaterThanThreshold
+      MetricName: CPUUtilization
+
+  CPUAlarmLow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      EvaluationPeriods: '1'
+      Statistic: Average
+      Threshold: '20'
+      AlarmDescription: Alarm if CPU too low
+      Period: '60'
+      AlarmActions:
+      - Ref: ScaleDownPolicy
+      Namespace: AWS/EC2
+      Dimensions:
+      - Name: AutoScalingGroupName
+        Value:
+          Ref: MyServerGroup
+      ComparisonOperator: LessThanThreshold
+      MetricName: CPUUtilization
+
+
