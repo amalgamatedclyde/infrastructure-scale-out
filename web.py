@@ -15,7 +15,7 @@ from bugsnag.tornado import BugsnagRequestHandler
 
 bugsnag.configure(
     api_key="16a92cf41c182a50aee6ca80fae9d65d",
-    project_root="/home/markable/py-features-api",
+    project_root="/home/ubuntu/py-features-api",
 )
 
 class MainHandler(BugsnagRequestHandler):
