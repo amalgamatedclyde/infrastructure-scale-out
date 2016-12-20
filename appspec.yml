@@ -1,0 +1,12 @@
+version: 0.0
+os: linux
+files:
+  - source: web.py
+    destination: /home/ubuntu/py-features-api/
+  - source: api.py
+    destination: /home/ubuntu/py-features-api/
+hooks:
+   AfterInstall:
+     - location: restart_supervisor.sh
+       runas: ubuntu
+       timeout: 180
